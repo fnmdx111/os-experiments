@@ -1,5 +1,5 @@
 from collections import defaultdict
-from misc import take
+from misc import take, get_cmd
 
 
 class PageTable(object):
@@ -10,7 +10,7 @@ class PageTable(object):
     def register(self, blocks):
         for page, block in enumerate(self._l):
             if blocks:
-                if block < 0:
+                if block == 'n/a':
                     self._l[page] = blocks[0]
                     blocks = blocks[1:]
         self._l.extend(blocks)
@@ -32,8 +32,8 @@ class PageTable(object):
 
     def display(self):
         for page, block in enumerate(self._l):
-            if block != 'n/a':
-                print '% 4s | % 4s' % (page, block)
+            # if block != 'n/a':
+            print '% 4s | % 4s' % (page, block)
 
 
 class Memory(object):
@@ -77,7 +77,7 @@ class Memory(object):
 
 
 def dispatch_command(memory, page_tables):
-    cmd = raw_input('> ').split()
+    cmd = raw_input('> ')
     if cmd[0] == 'h':
         print 'h(elp)             -- print this text'
         print 'a(llocate)         -- request for space allocation'
@@ -87,45 +87,38 @@ def dispatch_command(memory, page_tables):
         print 'd(isplay)          -- display the content of the page table'
         print 'display (b)it map  -- display the content of the bit map'
     elif cmd[0] == 'd':
-        if len(cmd) == 1:
-            for name in page_tables:
-                print '--', name, '--'
-                page_tables[name].display()
-        else:
-            _, name = cmd
+        args = get_cmd(cmd, '%c &s')
+        if not args:
+            return
+
+        (proc_names,) = args
+        if not proc_names:
+            proc_names = page_tables.keys()
+
+        for name in proc_names:
+            print '--', name, '--'
             page_tables[name].display()
     elif cmd[0] == 'a':
-        if len(cmd) == 1:
-            proc_name, size = raw_input('proc_name size> ').split()
-        else:
-            _, proc_name, size = cmd
-
-        try:
-            size = int(size)
-        except BaseException:
-            print 'incorrect argument, input number only'
+        args = get_cmd(cmd, '%c %s %i', hint='proc_name size')
+        if not args:
             return
+        proc_name, size = args
 
-        cmd_allocation(memory, page_tables, proc_name, size)
+        blocks = memory.allocate(size)
+        print '%s allocated' % blocks
+        if blocks:
+            page_tables[proc_name].register(blocks)
     elif cmd[0] == 'r':
-        if len(cmd) == 1:
-            _ = raw_input('proc_name pages> ').split()
-            try:
-                proc_name, pages = _[0], _[1:]
-            except BaseException:
-                print 'incorrect argument'
-                return
-        else:
-            proc_name = cmd[1]
-            pages = cmd[2:]
-
-        try:
-            pages = map(int, pages)
-        except BaseException:
-            print 'incorrect argument, input number only'
+        args = get_cmd(cmd, '%c %s &i', hint='proc_name pages')
+        if not args:
             return
+        proc_name, pages = args
+        if not pages:
+            pages = [i for i, content in enumerate(page_tables[proc_name]._l)
+                     if content != 'n/a']
 
-        cmd_release(memory, page_tables, proc_name, pages)
+        memory.release(*pages)
+        page_tables[proc_name].release(*pages)
     elif cmd[0] == 'b':
         print 'available blocks: %s' % memory.available_block_amount
         for line in take(memory.bit_map):
@@ -133,19 +126,6 @@ def dispatch_command(memory, page_tables):
     else:
         print 'unrecognized command, type `h\' for help'
 
-
-def cmd_release(m, pts, proc_name, pages):
-    m.release(*pages)
-    pts[proc_name].release(*pages)
-
-
-def cmd_allocation(m, pts, proc_name, size):
-    blocks = m.allocate(size)
-
-    print '%s allocated' % blocks
-
-    if blocks:
-        pts[proc_name].register(blocks)
 
 
 if __name__ == '__main__':

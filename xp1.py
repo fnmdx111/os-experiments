@@ -1,7 +1,7 @@
 #encoding: utf-8
 
 from Queue import PriorityQueue
-from misc import regularize_args, identity
+from misc import get_cmd
 
 STATUS_RUNNING = 1
 STATUS_FINISHED = 2
@@ -80,30 +80,23 @@ def dispatch_command():
             print 'd(isplay)   -- display the content of queue'
             return 'h', 0
         elif cmd[0] == 'c':
-            if cmd == 'c':
+            args = get_cmd(cmd, '%c &i')
+            if not args:
+                return 'c', -1
+
+            (times,) = args
+            if times:
+                return 'c', times[0]
+            else:
                 return 'c', 0
-            else:
-                try:
-                    (times,) = regularize_args(None, lambda i: int(i) - 1)(cmd.split())
-                    return 'c', times
-                except BaseException:
-                    print 'incorrect arguments, type h for further help'
-                    return 'c', -1
         elif cmd[0] == 'n':
-            if cmd == 'n':
-                pcb = ProcessControlBlock.make_pcb()
-                if pcb:
-                    queue.put((pcb.priority, pcb))
-                    return 'n', 0
-            else:
-                try:
-                    n, t, p = regularize_args(None, identity, int, int)(cmd.split())
-                    pcb = ProcessControlBlock(n, t, p)
-                    queue.put((pcb.priority, pcb))
-                    return 'n', 0
-                except BaseException:
-                    print 'incorrect arguments, input proc_name time_demand priority separated by space'
-                    return 'n', -1
+            args = get_cmd(cmd, '%c %s %i %i', hint='proc_n t prior')
+            if not args:
+                return 'n', -1
+
+            pcb = ProcessControlBlock(*args)
+            queue.put((pcb.priority, pcb))
+            return 'n', 0
         elif cmd in commands:
             return cmd, commands[cmd]()
         else:
@@ -114,13 +107,13 @@ def dispatch_command():
 
 if __name__ == '__main__':
     queue = PriorityQueue()
-    l = map(ProcessControlBlock,
-            ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-            [2, 3, 1, 4, 3, 1, 2],
-            [2, 7, 1, 6, 5, 3, 2])
+    # l = map(ProcessControlBlock,
+    #         ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+    #         [2, 3, 1, 4, 3, 1, 2],
+    #         [2, 7, 1, 6, 5, 3, 2])
     queue.put((65535, IdleProcess()))
-    for pcb in l:
-        queue.put((pcb.priority, pcb))
+    # for pcb in l:
+    #     queue.put((pcb.priority, pcb))
 
     commands = {'d': lambda: display_queue(queue)}
 
@@ -132,6 +125,8 @@ if __name__ == '__main__':
             signal, arg = dispatch_command()
             if signal == 'c':
                 cmd_skip_cnt = arg
+            else:
+                continue
 
         _, pcb = queue.get()
 
