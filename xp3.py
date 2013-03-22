@@ -1,9 +1,5 @@
 from misc import get_cmd
 
-blocks = 200 * 20 * 6
-hard_drive = [(0, blocks, True)]
-file_table = {}
-
 class HardDrive(object):
     class ATItem(object):
         def __init__(self, start, n):
@@ -21,7 +17,7 @@ class HardDrive(object):
 
 
         def __nonzero__(self):
-            return self.n
+            return self.n # 判断表目空的条件是块数是否为0
 
 
         def __str__(self):
@@ -47,7 +43,7 @@ class HardDrive(object):
         else:
             return False, 0
 
-        self._allocation_table = filter(bool, self._allocation_table)
+        self._allocation_table = filter(bool, self._allocation_table) # 过滤空表目
         s = self._file_table[filename].start
         return True, {'sector': s % 6,
                       'track': (s / 6) % 20,
@@ -56,11 +52,12 @@ class HardDrive(object):
 
     def _insert(self, item):
         idx = 0
-        for i, _item in reversed(tuple(enumerate(self._allocation_table))):
+        for i, _item in reversed(tuple(enumerate(self._allocation_table))): # 空闲区表本身是排好序的表
             if _item.start < item.start:
-                idx = i + 1
+                idx = i + 1 # 找到合适的位置后，记录下索引号
                 break
-        self._allocation_table.insert(idx, item)
+        self._allocation_table.insert(idx, item) # 在记录下的索引号处插入表目，使得空闲区表保持有序性，
+                                                 # 这样做比直接排序要慢，但是效率更好
 
 
     def recycle(self, filename):
@@ -68,12 +65,12 @@ class HardDrive(object):
             return False
 
         start, n = self._file_table[filename]
-        del self._file_table[filename]
+        del self._file_table[filename] # 删除文件表里的对应条目
 
         self._insert(HardDrive.ATItem(start, n))
 
         stack = [self._allocation_table[0]]
-        for item in self._allocation_table[1:]:
+        for item in self._allocation_table[1:]: # 尝试合并可以合并的空闲区表表目
             if stack[-1].start + stack[-1].n == item.start:
                 stack[-1].n += item.n
             else:

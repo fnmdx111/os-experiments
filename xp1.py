@@ -20,7 +20,7 @@ class ProcessControlBlock(object):
 
     def run_once(self):
         if not self.is_finished():
-            if self.time_demand:
+            if self.time_demand: # 如果time_demand不为0
                 self.time_demand -= 1
                 self.priority += 1
                 print '%s run' % self.proc_name
@@ -33,22 +33,11 @@ class ProcessControlBlock(object):
 
 
     def __str__(self):
-        return 'process %s; %s; %s' % (self.proc_name, self.time_demand, self.priority)
+        return 'process % 5s; % 5s; % 5s' % (self.proc_name, self.time_demand, self.priority)
 
 
     def __repr__(self):
         return self.__str__()
-
-
-    @staticmethod
-    def make_pcb():
-        try:
-            proc_name, time_demand, priority = raw_input('proc_n t prior> ').split(' ')
-            return ProcessControlBlock(proc_name,
-                                       int(time_demand),
-                                       int(priority))
-        except BaseException:
-            print 'aborted'
 
 
 
@@ -63,7 +52,8 @@ class IdleProcess(ProcessControlBlock):
 
 
 def display_queue(queue):
-    for item in queue.queue:
+    print '** queue ** name;     t;     p'
+    for _, item in queue.queue: # 忽略queue里每个条目的优先级
         print '--', item
 
 
@@ -71,12 +61,14 @@ def display_queue(queue):
 def dispatch_command():
     while True:
         cmd = raw_input('> ')
+        if not len(cmd):
+            return None, 0
+
         if cmd[0] == 'h':
             print 'h(elp)      -- print this text'
-            print 'c(ontinue)  -- continue simulation'
-            print '\ttype `c\' or `c times\''
-            print 'n(ew pcb)   -- make new PCB and push it into queue'
-            print '\ttype `n\' or `n name time priority\''
+            print 'c(ontinue)  -- continue simulation', 'type `c\' or `c times\''
+            print 'n(ew pcb)   -- make new PCB and push it into queue',\
+                                    'type `n\' or `n name time priority\''
             print 'd(isplay)   -- display the content of queue'
             return 'h', 0
         elif cmd[0] == 'c':
@@ -95,7 +87,9 @@ def dispatch_command():
                 return 'n', -1
 
             pcb = ProcessControlBlock(*args)
-            queue.put((pcb.priority, pcb))
+            queue.put((pcb.priority, pcb)) # 优先队列的使用方法是放入队伍时，
+                                           # 放入(p, i)，
+                                           # 其中p表示优先级，i表示放入的元素
             return 'n', 0
         elif cmd in commands:
             return cmd, commands[cmd]()
@@ -107,13 +101,7 @@ def dispatch_command():
 
 if __name__ == '__main__':
     queue = PriorityQueue()
-    # l = map(ProcessControlBlock,
-    #         ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
-    #         [2, 3, 1, 4, 3, 1, 2],
-    #         [2, 7, 1, 6, 5, 3, 2])
     queue.put((65535, IdleProcess()))
-    # for pcb in l:
-    #     queue.put((pcb.priority, pcb))
 
     commands = {'d': lambda: display_queue(queue)}
 
@@ -128,7 +116,7 @@ if __name__ == '__main__':
             else:
                 continue
 
-        _, pcb = queue.get()
+        _, pcb = queue.get() # 忽略queue里存放的优先级
 
         pcb.run_once()
         if not pcb.is_finished():

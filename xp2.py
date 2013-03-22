@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 from collections import defaultdict
 from misc import take, get_cmd
 
@@ -8,32 +10,43 @@ class PageTable(object):
 
 
     def register(self, blocks):
-        for page, block in enumerate(self._l):
-            if blocks:
+        for page, block in enumerate(self._l): # self._l中元素的索引号作为页号，
+                                               # 元素作为对应的块号
+            if blocks: # 如果还剩下未登记的块，才继续
                 if block == 'n/a':
-                    self._l[page] = blocks[0]
-                    blocks = blocks[1:]
+                    self._l[page] = blocks.pop(0)
         self._l.extend(blocks)
 
 
     def release(self, *pages):
         for page in pages:
-            if len(self._l) > page:
+            if len(self._l) > page: # 检测页表长度
                 if self._l[page] != 'n/a':
                     print 'releasing page %s' % page
                     self._l[page] = 'n/a'
-                else:
+                else: # 该页已被释放，操作无效
                     print 'trying to release invalid page, aborting'
                     return
             else:
                 print 'trying to release invalid page, aborting'
                 return
+        return True
+
+
+    def get_block(self, page):
+        if page < len(self._l):
+            return self._l[page]
+        else:
+            print 'accessing invalid page %s' % page
 
 
     def display(self):
-        for page, block in enumerate(self._l):
-            # if block != 'n/a':
-            print '% 4s | % 4s' % (page, block)
+        for pairs in map(lambda *_: _, *take(list(enumerate(self._l)), by=5)): # 按5列表示
+            for pair in pairs:
+                if pair:
+                    # if block != 'n/a':
+                    print '%s | %s' % (str(pair[0]).rjust(3), str(pair[1]).ljust(3)),
+            print
 
 
 class Memory(object):
@@ -56,7 +69,7 @@ class Memory(object):
 
         allocated = []
         for block_number, block_not_available in enumerate(self.bit_map):
-            if not block_not_available:
+            if not block_not_available: # 即该块可用
                 if len(allocated) < blocks_needed:
                     allocated.append(block_number)
                     self.bit_map[block_number] = 1
@@ -69,6 +82,7 @@ class Memory(object):
 
     def release(self, *block_numbers):
         for block_number in block_numbers:
+            print 'releasing block %s' % block_number
             self.bit_map[block_number] = 0
             self.available_block_amount += 1
 
@@ -80,10 +94,8 @@ def dispatch_command(memory, page_tables):
     cmd = raw_input('> ')
     if cmd[0] == 'h':
         print 'h(elp)             -- print this text'
-        print 'a(llocate)         -- request for space allocation'
-        print '\ttype `a\' or `a proc_name size\''
-        print 'r(elease)          -- release space'
-        print '\ttype `r\' or `r proc_name block0 block1 block2 ...\''
+        print 'a(llocate)         -- request for space allocation', 'type `a\' or `a proc_name size\''
+        print 'r(elease)          -- release space', 'type `r\' or `r proc_name block0 block1 block2 ...\''
         print 'd(isplay)          -- display the content of the page table'
         print 'display (b)it map  -- display the content of the bit map'
     elif cmd[0] == 'd':
@@ -93,11 +105,14 @@ def dispatch_command(memory, page_tables):
 
         (proc_names,) = args
         if not proc_names:
-            proc_names = page_tables.keys()
+            proc_names = sorted(page_tables.keys())
 
         for name in proc_names:
-            print '--', name, '--'
-            page_tables[name].display()
+            if name not in page_tables:
+                print '%s is not a process' % name
+            else:
+                print '--', name, '--', ' page | block'
+                page_tables[name].display()
     elif cmd[0] == 'a':
         args = get_cmd(cmd, '%c %s %i', hint='proc_name size')
         if not args:
@@ -116,12 +131,14 @@ def dispatch_command(memory, page_tables):
         if not pages:
             pages = [i for i, content in enumerate(page_tables[proc_name]._l)
                      if content != 'n/a']
+        blocks = filter(lambda b: b is not None and b != 'n/a',
+                        [page_tables[proc_name].get_block(p) for p in pages])
 
-        memory.release(*pages)
+        memory.release(*blocks)
         page_tables[proc_name].release(*pages)
     elif cmd[0] == 'b':
         print 'available blocks: %s' % memory.available_block_amount
-        for line in take(memory.bit_map):
+        for line in take(memory.bit_map, by=8):
             print line
     else:
         print 'unrecognized command, type `h\' for help'
