@@ -5,46 +5,56 @@ from misc import take, get_cmd
 
 
 class PageTable(object):
-    def __init__(self):
-        self._l = []
+    def __init__(self, memory):
+        self.table = {}
+        self.memory = memory
 
 
     def register(self, blocks):
-        for page, block in enumerate(self._l): # self._l中元素的索引号作为页号，
-                                               # 元素作为对应的块号
-            if blocks: # 如果还剩下未登记的块，才继续
-                if block == 'n/a':
-                    self._l[page] = blocks.pop(0)
-        self._l.extend(blocks)
+        page_numbers = self.table.keys()
+        max_page_number = max(self.table.keys()) if self.table.keys() else -1
+        unused_page_numbers = set(range(max_page_number)) - set(page_numbers)
+
+        for page_number in unused_page_numbers: # 先把未用的页号填满
+            if blocks:
+                self.table[page_number] = blocks.pop(0)
+            else: # 没有要登记的块了，可以直接返回了
+                return
+
+        page_number = max_page_number + 1 # 未用块号全部填满之后
+                                          # 从最大块号 + 1开始继续登记
+        for block in blocks:
+            self.table[page_number] = block
+            page_number += 1
 
 
     def release(self, *pages):
+        if len(pages) > len(self.table):
+            print 'requested page amount exceeds page table length, aborting'
+            return
+
         for page in pages:
-            if len(self._l) > page: # 检测页表长度
-                if self._l[page] != 'n/a':
-                    print 'releasing page %s' % page
-                    self._l[page] = 'n/a'
-                else: # 该页已被释放，操作无效
-                    print 'trying to release invalid page, aborting'
-                    return
+            if page in self.table:
+                self.memory.release(self.get_block(page))
+
+                print 'releasing page %s' % page
+                del self.table[page]
             else:
-                print 'trying to release invalid page, aborting'
+                print 'trying to release invalid page %s, aborting' % page
                 return
-        return True
 
 
     def get_block(self, page):
-        if page < len(self._l):
-            return self._l[page]
+        if page in self.table:
+            return self.table[page]
         else:
             print 'accessing invalid page %s' % page
 
 
     def display(self):
-        for pairs in map(lambda *_: _, *take(list(enumerate(self._l)), by=5)): # 按5列表示
+        for pairs in map(lambda *_: _, *take(list(self.table.iteritems()), by=5)): # 按5列表示
             for pair in pairs:
                 if pair:
-                    # if block != 'n/a':
                     print '%s | %s' % (str(pair[0]).rjust(3), str(pair[1]).ljust(3)),
             print
 
@@ -64,7 +74,7 @@ class Memory(object):
         print '%s blocks needed, %s available, after allocation %s available' % (blocks_needed, self.available_block_amount, self.available_block_amount - blocks_needed)
 
         if blocks_needed > self.available_block_amount:
-            print 'requested size exceeded available memory'
+            print 'requested size exceeded available memory size'
             return
 
         allocated = []
@@ -82,9 +92,9 @@ class Memory(object):
 
     def release(self, *block_numbers):
         for block_number in block_numbers:
-            print 'releasing block %s' % block_number
             self.bit_map[block_number] = 0
             self.available_block_amount += 1
+            print 'releasing block %s' % block_number
 
 
 
@@ -129,12 +139,8 @@ def dispatch_command(memory, page_tables):
             return
         proc_name, pages = args
         if not pages:
-            pages = [i for i, content in enumerate(page_tables[proc_name]._l)
-                     if content != 'n/a']
-        blocks = filter(lambda b: b is not None and b != 'n/a',
-                        [page_tables[proc_name].get_block(p) for p in pages])
+            pages = page_tables[proc_name].table.keys()
 
-        memory.release(*blocks)
         page_tables[proc_name].release(*pages)
     elif cmd[0] == 'b':
         print 'available blocks: %s' % memory.available_block_amount
@@ -146,7 +152,8 @@ def dispatch_command(memory, page_tables):
 
 
 if __name__ == '__main__':
-    mem, page_tables = Memory(), defaultdict(PageTable)
+    mem = Memory()
+    page_tables = defaultdict(lambda: PageTable(mem))
 
     while True:
         dispatch_command(mem, page_tables)
