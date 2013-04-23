@@ -52,6 +52,9 @@ class PageTable(object):
 
 
     def display(self):
+        if not self.table:
+            print 'empty'
+            return
         for pairs in map(lambda *_: _, *take(list(self.table.iteritems()), by=5)): # 按5列表示
             for pair in pairs:
                 if pair:
