@@ -1,3 +1,6 @@
+# encoding: utf-8
+from collections import OrderedDict
+
 from misc import get_cmd
 
 class HardDrive(object):
@@ -26,7 +29,7 @@ class HardDrive(object):
 
     def __init__(self):
         self._allocation_table = [HardDrive.ATItem(0, 6 * 200 * 20)]
-        self._file_table = {}
+        self._file_table = OrderedDict()
 
 
     def allocate(self, filename, blocks_required):
@@ -45,9 +48,17 @@ class HardDrive(object):
 
         self._allocation_table = filter(bool, self._allocation_table) # 过滤空表目
         s = self._file_table[filename].start
-        return True, {'sector': s % 6,
-                      'track': (s / 6) % 20,
-                      'cylinder': (s / 6) / 20}
+        return True, self.logical_to_physical(s)
+
+
+    def logical_to_physical(self, s):
+        return {'sector': s % 6,
+                'track': (s / 6) % 20,
+                'cylinder': (s / 6) / 20}
+
+
+    def physical_to_logical(self, p):
+        return p['sector'] + (p['cylinder'] * 20 + p['track']) * 6
 
 
     def _insert(self, item):
@@ -59,16 +70,24 @@ class HardDrive(object):
         self._allocation_table.insert(idx, item) # 在记录下的索引号处插入表目，使得空闲区表保持有序性，
                                                  # 这样做比直接排序要慢，但是效率更好
 
+    def remove(self, filename):
+        start, n = self._file_table[filename]
+        del self._file_table[filename] # 删除文件表里的对应条目
+        return start, n
+
 
     def recycle(self, filename):
         if filename not in self._file_table:
             return False
 
-        start, n = self._file_table[filename]
-        del self._file_table[filename] # 删除文件表里的对应条目
+        start, n = self.remove(filename)
 
         self._insert(HardDrive.ATItem(start, n))
 
+        return self.try_merge_item()
+
+
+    def try_merge_item(self):
         stack = [self._allocation_table[0]]
         for item in self._allocation_table[1:]: # 尝试合并可以合并的空闲区表表目
             if stack[-1].start + stack[-1].n == item.start:
